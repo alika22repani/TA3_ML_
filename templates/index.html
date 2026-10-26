@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="id" data-has-result="{{ '1' if result else '0' }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pemantau Kondisi Mesin</title>
+<style>
+:root{--brand:#4338ca;--brand-soft:#eef0ff;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f5f7fb;
+ --ok:#059669;--ok-soft:#e6f7f0;--bad:#e11d48;--bad-soft:#ffeaee;
+ --font:"Bahnschrift","Segoe UI",system-ui,-apple-system,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);line-height:1.5}
+.top{background:var(--brand);color:#fff}
+.bar{max-width:1000px;margin:auto;padding:14px clamp(16px,4vw,32px);display:flex;align-items:center;gap:12px;font-weight:600}
+.logo{width:26px;height:26px;border-radius:7px;background:#fff;position:relative}
+.logo::after{content:"";position:absolute;inset:7px;border-radius:50%;border:3px solid var(--brand)}
+.hero{max-width:1000px;margin:auto;padding:22px clamp(16px,4vw,32px) 70px}
+h1{margin:0 0 6px;font-size:clamp(1.7rem,3.4vw,2.3rem);letter-spacing:-.015em}
+.hero p{margin:0;max-width:56ch;color:#dfe2ff}
+main{max-width:1000px;margin:-46px auto 48px;padding:0 clamp(16px,4vw,32px)}
+.grid{display:grid;grid-template-columns:1.2fr 1fr;gap:20px;align-items:start}
+@media (max-width:800px){.grid{grid-template-columns:1fr}}
+.panel{background:#fff;border:1px solid var(--line);border-radius:16px;padding:26px;box-shadow:0 10px 30px #1e1b4b14}
+.panel h2{margin:0 0 18px;font-size:1.05rem}
+.lbl{display:block;font-size:.88rem;font-weight:600;margin-bottom:6px}
+.hint{display:block;font-weight:400;font-size:.76rem;color:var(--muted);margin-top:4px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:16px 16px}
+@media (max-width:480px){.row{grid-template-columns:1fr}}
+.seg{display:inline-flex;background:var(--brand-soft);border-radius:10px;padding:4px;margin-bottom:18px}
+.seg input{position:absolute;opacity:0}
+.seg label{padding:7px 22px;border-radius:7px;cursor:pointer;font-weight:600;color:var(--brand)}
+.seg input:checked+label{background:var(--brand);color:#fff}
+.seg input:focus-visible+label{outline:3px solid #a5b4fc}
+.field{display:flex}
+input[type=number]{font:inherit;color:var(--ink);background:#fff;border:1px solid #cbd5e1;padding:9px 11px;width:100%;min-width:0;border-radius:9px 0 0 9px;font-variant-numeric:tabular-nums}
+input[type=number]:focus{outline:2px solid var(--brand);outline-offset:-1px;border-color:var(--brand)}
+.unit{display:flex;align-items:center;padding:0 12px;background:var(--brand-soft);color:var(--brand);font-size:.8rem;font-weight:600;border:1px solid #cbd5e1;border-left:0;border-radius:0 9px 9px 0}
+.live{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:22px 0}
+.live div{background:var(--brand-soft);border-radius:10px;padding:10px 14px;font-size:.78rem;color:var(--muted)}
+.live b{display:block;font-size:1.25rem;color:var(--brand);font-variant-numeric:tabular-nums}
+.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+button{font:inherit;font-weight:600;cursor:pointer;border-radius:9px;padding:11px 18px}
+button:focus-visible{outline:3px solid #a5b4fc;outline-offset:2px}
+.main{background:var(--brand);color:#fff;border:0}
+.main:hover{background:#3730a3}
+.ghost{background:#fff;border:1px solid #cbd5e1;color:var(--ink)}
+.ghost:hover{background:var(--brand-soft)}
+.result{position:sticky;top:20px;text-align:center}
+.result h2{text-align:left}
+.gauge{width:100%;max-width:300px;margin:0 auto;display:block}
+.gauge text{font-family:var(--font)}
+.pill{display:inline-block;margin-top:4px;padding:6px 16px;border-radius:99px;font-weight:700}
+.pill.ok{background:var(--ok-soft);color:var(--ok)} .pill.bad{background:var(--bad-soft);color:var(--bad)}
+.note{color:var(--muted);font-size:.9rem;margin:14px auto 0;max-width:34ch}
+.empty{padding:18px 8px 6px;color:var(--muted)}
+.empty .ring{width:150px;margin:0 auto 12px;display:block}
+.err{background:var(--bad-soft);color:var(--bad);padding:10px 12px;border-radius:9px;margin-bottom:16px;font-weight:600}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="bar"><span class="logo"></span>Pemantau Kondisi Mesin</div>
+  <div class="hero">
+    <h1>Prediksi kegagalan mesin industri</h1>
+    <p>Masukkan parameter operasional untuk memperkirakan peluang mesin gagal pada siklus berikutnya.</p>
+  </div>
+</div>
+
+{% set units = {'air_temp':'K','process_temp':'K','rpm':'rpm','torque':'Nm','tool_wear':'menit'} %}
+{% set ranges = {'air_temp':'Kisaran data: 295–305','process_temp':'Kisaran data: 306–314','rpm':'Kisaran data: 1.170–2.890','torque':'Kisaran data: 4–77','tool_wear':'Kisaran data: 0–253'} %}
+<main><div class="grid">
+  <form class="panel" method="post" id="f">
+    <h2>Parameter mesin</h2>
+    {% if error %}<div class="err">{{ error }}</div>{% endif %}
+    <span class="lbl">Tipe produk</span>
+    <div class="seg" role="radiogroup" aria-label="Tipe produk">
+      {% for t in ['L','M','H'] %}
+        <input type="radio" name="type" id="t{{t}}" value="{{t}}" {{ 'checked' if form.get('type', 'L')==t }}><label for="t{{t}}">{{t}}</label>
+      {% endfor %}
+    </div>
+    <div class="row">
+    {% for name,label,default in fields %}
+      <div>
+        <label class="lbl" for="{{name}}">{{ label.split(' [')[0] }}</label>
+        <span class="field"><input type="number" step="any" id="{{name}}" name="{{name}}" value="{{ form.get(name, default) }}" required><span class="unit">{{ units[name] }}</span></span>
+        <span class="hint">{{ ranges[name] }}</span>
+      </div>
+    {% endfor %}
+    </div>
+    <div class="live">
+      <div>Selisih suhu proses dan udara<b id="d1">–</b></div>
+      <div>Daya mekanis<b id="d2">–</b></div>
+    </div>
+    <div class="actions">
+      <button class="main" type="submit">Prediksi kegagalan</button>
+      <button class="ghost" type="button" data-fill="300,310,1500,40,100">Contoh normal</button>
+      <button class="ghost" type="button" data-fill="302,310.2,1300,60,220">Contoh berisiko</button>
+    </div>
+  </form>
+
+  <section class="panel result" id="hasil" aria-live="polite">
+    <h2>Hasil diagnosis</h2>
+    {% if result %}
+      {% set c = 'bad' if result.risk else 'ok' %}
+      {% set col = '#e11d48' if result.risk else '#059669' %}
+      <svg class="gauge" viewBox="0 0 200 120" role="img" aria-label="Peluang gagal {{ result.prob }} persen">
+        <path d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="#e2e8f0" stroke-width="16" stroke-linecap="round" pathLength="100"/>
+        <path d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="{{col}}" stroke-width="16" stroke-linecap="round" pathLength="100" stroke-dasharray="{{ [result.prob,0.01]|max }} 100"/>
+        <line x1="100" y1="12" x2="100" y2="32" stroke="#0f172a" stroke-width="2.5"/>
+        <text x="100" y="88" text-anchor="middle" font-size="34" font-weight="700" fill="{{col}}">{{ result.prob }}%</text>
+        <text x="100" y="108" text-anchor="middle" font-size="10" fill="#64748b">peluang gagal</text>
+      </svg>
+      <span class="pill {{c}}">{{ result.label }}</span>
+      <p class="note">{% if result.risk %}Peluang di atas batas keputusan 50%. Jadwalkan pemeriksaan sebelum mesin dioperasikan lagi.{% else %}Peluang di bawah batas keputusan 50%. Tetap ikuti jadwal perawatan rutin.{% endif %}</p>
+    {% else %}
+      <div class="empty">
+        <svg class="ring" viewBox="0 0 200 120"><path d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="#e2e8f0" stroke-width="16" stroke-linecap="round"/></svg>
+        Belum ada prediksi.<br>Isi parameter lalu tekan “Prediksi kegagalan”.
+      </div>
+    {% endif %}
+  </section>
+</div></main>
+<script>
+const f=document.getElementById('f'), q=n=>f.elements[n]||{value:''};
+function live(){
+  const a=+q('air_temp').value,p=+q('process_temp').value,r=+q('rpm').value,t=+q('torque').value;
+  d1.textContent=isFinite(p-a)?(p-a).toFixed(1)+' K':'–';
+  d2.textContent=isFinite(t*r)?Math.round(t*r*2*Math.PI/60)+' W':'–';
+}
+f.addEventListener('input',live); live();
+document.querySelectorAll('[data-fill]').forEach(b=>b.onclick=()=>{
+  ['air_temp','process_temp','rpm','torque','tool_wear'].forEach((n,i)=>q(n).value=b.dataset.fill.split(',')[i]); live();
+});
+if(document.documentElement.dataset.hasResult==='1' && innerWidth<=800) hasil.scrollIntoView({behavior:'smooth'});
+</script>
+</body></html>
